@@ -25,6 +25,12 @@ def ReLU(x_i):
     return x_i * (x_i > 0)
 
 
+def softmax(x, axis=None):
+    x = x - x.max(axis=axis, keepdims=True)
+    y = np.exp(x)
+    return y / y.sum(axis=axis, keepdims=True)
+
+
 class LinearModel(object):
     def __init__(self, n_classes, n_features, **kwargs):
         self.W = np.zeros((n_classes, n_features))
@@ -54,11 +60,8 @@ class LinearModel(object):
 
 
 class Perceptron(LinearModel):
-    def __init__(self, learning_rate=1e-4, activation_func=ReLU):
-        self.learning_rate = learning_rate
-        self.bias = 0
-        self.activation_func = activation_func
-        
+    def __init__(self, n_classes, n_features):
+        super().__init__(n_classes, n_features)
 
     def update_weight(self, x_i, y_i, **kwargs):
         """
@@ -66,14 +69,14 @@ class Perceptron(LinearModel):
         y_i (scalar): the gold label for that example
         other arguments are ignored
         """
-        # Q1.1a
-        lin_pred = x_i.dot(self.W) + self.bias
-        y_pred = self.activation_func(lin_pred)
+        # Make prediction 
+        y_pred = np.argmax(np.dot(self.W, x_i))
 
-        grad = self.learning_rate * (y_i - y_pred)
-        self.W += grad * x_i
-        self.bias += grad
-
+        # Compute gradient and update
+        if y_i != y_pred:
+            self.W[y_i] += x_i
+            self.W[y_pred] -= x_i
+            
 
 class LogisticRegression(LinearModel):
     def update_weight(self, x_i, y_i, learning_rate=0.001):
@@ -122,7 +125,7 @@ def plot(epochs, valid_accs, test_accs):
     plt.plot(epochs, valid_accs, label='validation')
     plt.plot(epochs, test_accs, label='test')
     plt.legend()
-    plt.show()
+    plt.savefig('Perceptron_loss.png')
 
 
 def main():
