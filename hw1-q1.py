@@ -18,17 +18,17 @@ def configure_seed(seed):
     np.random.seed(seed)
 
 
+def softmax(x, axis=None):
+    x = x - x.max(axis=axis, keepdims=True)
+    y = np.exp(x)
+    return y / y.sum(axis=axis, keepdims=True)
+
+
 def ReLU(x_i):
     """
     x_i (n_features): np array for a single training sample
     """
     return x_i * (x_i > 0)
-
-
-def softmax(x, axis=None):
-    x = x - x.max(axis=axis, keepdims=True)
-    y = np.exp(x)
-    return y / y.sum(axis=axis, keepdims=True)
 
 
 class LinearModel(object):
@@ -63,6 +63,9 @@ class Perceptron(LinearModel):
     def __init__(self, n_classes, n_features):
         super().__init__(n_classes, n_features)
 
+    def _sign(x_i):
+        return 1 * (x_i > 0)
+
     def update_weight(self, x_i, y_i, **kwargs):
         """
         x_i (n_features): a single training example
@@ -72,21 +75,40 @@ class Perceptron(LinearModel):
         # Make prediction 
         y_pred = np.argmax(np.dot(self.W, x_i))
 
-        # Compute gradient and update
+        # update upon mismatch
         if y_i != y_pred:
             self.W[y_i] += x_i
             self.W[y_pred] -= x_i
             
 
 class LogisticRegression(LinearModel):
+    def __init__(self, n_classes, n_features):
+        super().__init__(n_classes, n_features)
+
+    def _sigmoid(self, z):
+        return 1 / (1 + np.exp(-z))
+
+    def _one_hot(self, y_i):
+        return np.eye(self.W.shape[0])[y_i]
+
+    def loss(x_i, y_i, h):
+        return (-y_i * np.log(h) - (1 - y_i) * np.log(1 - h)).mean()
+
     def update_weight(self, x_i, y_i, learning_rate=0.001):
         """
         x_i (n_features): a single training example
         y_i: the gold label for that example
         learning_rate (float): keep it at the default value for your plots
         """
-        # Q1.1b
-        raise NotImplementedError
+        # Q1.1b 
+        y_one_hot = self._one_hot(y_i)
+
+        z = np.dot(self.W, x_i)
+        h = self._sigmoid(z)
+        error = y_one_hot - h
+
+        grad = np.outer(error, x_i)
+        self.W += learning_rate * grad
 
 
 class MLP(object):
