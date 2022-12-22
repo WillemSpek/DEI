@@ -1,6 +1,11 @@
 #!/usr/bin/env python
 
-# Deep Learning Homework 1
+"""
+Deep Learning Homework 1
+Author: Willem van der Spek
+Co-Author: Nuno Damos
+"""
+
 
 import argparse
 import random
@@ -19,29 +24,28 @@ def configure_seed(seed):
 
 
 def softmax(x, axis=0):
-    y = x - np.max(x, axis=axis)
+    """
+    Numerically stable softmax activation function.
+    """
+    y = x - np.max(x, axis=axis) # Wrap around largest 
     z = np.exp(y)
     return z / z.sum(axis=axis, keepdims=True)
 
 
-def dsoftmax(X):
-    derivs = []
-    for i in range(X.shape[1]):
-        x = X[:,i]
-        I = np.eye(x.shape[0])
-        derivs.append(softmax(x) * (I - softmax(x).T))
-    return np.array(derivs)
+def ReLU(X):
+    return X * (X > 0)
 
 
-def ReLU(x_i):
-    """
-    x_i (n_features): np array for a single training sample
-    """
-    return x_i * (x_i > 0)
+def dReLU(X):
+    return 1 * (X > 0)
 
 
-def dReLU(x_i):
-    return 1 * (x_i > 0)
+def leaky_ReLU(X, alpha=0.01):
+    return np.where(X > 0, X, X * alpha)
+
+
+def dleaky_ReLU(X, alpha=0.01):
+    return np.where(X > 0, 1, alpha)
 
 
 class LinearModel(object):
@@ -78,11 +82,13 @@ class Perceptron(LinearModel):
 
     def update_weight(self, x_i, y_i, **kwargs):
         """
-        x_i (n_features): a single training example
-        y_i (scalar): the gold label for that example
+        args:
+            x_i (n_features): a single training example
+            y_i (scalar): the gold label for that example
         other arguments are ignored
+
+        Updat the weights for the Perceptron model for a single training epoch.
         """
-        # Make prediction 
         y_pred = np.argmax(np.dot(self.W, x_i))
 
         # update upon mismatch
@@ -101,113 +107,189 @@ class LogisticRegression(LinearModel):
     def _one_hot(self, y_i):
         return np.eye(self.W.shape[0])[y_i]
 
-    def loss(x_i, y_i, h):
-        return (-y_i * np.log(h) - (1 - y_i) * np.log(1 - h)).mean()
-
     def update_weight(self, x_i, y_i, learning_rate=0.001):
         """
-        x_i (n_features): a single training example
-        y_i: the gold label for that example
-        learning_rate (float): keep it at the default value for your plots
+        Args:
+            x_i (n_features): a single training example
+            y_i: the gold label for that example
+            learning_rate (float): keep it at the default value for your plots
+        Update the weights for the logistic regression model for a single epoch.
+
         """
         # Q1.1b 
-        y_one_hot = self._one_hot(y_i)
-
+        y_one_hot = self._one_hot(y_i) 
         z = np.dot(self.W, x_i)
         h = self._sigmoid(z)
         error = y_one_hot - h
 
+        # Update
         grad = np.outer(error, x_i)
         self.W += learning_rate * grad
 
 
 class MLP(object):
-    # Q3.2b. This MLP skeleton code allows the MLP to be used in place of the
-    # linear models with no changes to the training loop or evaluation code
-    # in main().
+    """
+    Q1.2b. This MLP skeleton code allows the MLP to be used in place of the
+    linear models with no changes to the training loop or evaluation code
+    in main().
+    
+    Attributes:
+        n_classes: Number of classes to predict
+        W: Model weights 
+        b: Model biases 
+        activate: Activation funcs used at each layer.
+    """
     def __init__(self, n_classes, n_features, hidden_size, n_layers):
-        # Constants
-        self.n_classes = n_classes
-        self.n_layers = 3
+        """
+        Args: 
+            n_classes: Number of classes to predict
+            n_features: Number of features 
+            hidden_size: Number of hidden nodes to be used
 
-        # Iterables
-        self.W = np.array([.1 * np.ones((hidden_size, n_features)), 
-                           .1 * np.ones((hidden_size, hidden_size)),
-                           .1 * np.ones((n_classes, hidden_size))])
-        self.biases = np.array([.1 * np.ones(hidden_size),
-                                .1 * np.ones(hidden_size), 
-                                .1 * np.ones(n_classes)])          
-        self.activate = np.array([ReLU, ReLU, softmax])
+        Inits MLP with normal random weights and zero biases.
+        """
+        self.n_classes = n_classes
+        self.n_layers = n_layers + 1
+
+        # Metaparameters for initialising weights.
+        mu = .1
+        sigma = np.sqrt(0.1)
+
+        self.W = []
+        self.b = []
+        self.activate = []
+
+        for i in range(n_layers):
+            size = (hidden_size, n_features) if not i else (hidden_size, hidden_size)
+            self.W.append(np.random.normal(mu, sigma, size=size)), 
+            self.b.append(np.zeros((hidden_size, 1)))
+            self.activate.append(leaky_ReLU)
+        self.W.append(np.random.normal(mu, sigma, size=(n_classes, hidden_size)))
+        self.b.append(np.zeros((n_classes, 1)))
+        self.activate.append(softmax)
 
     def _one_hot(self, y):
+        """
+        Args:
+            y <int>: gold label as integer
+
+        Returns the one-hot encoded representation of an integer:
+        Example for n_classes = 3: y = 1 => np.array([0, 1, 0]).T
+        """
         return np.eye(self.n_classes)[y].T
 
     def _forward(self, X):
-        # Compute the forward pass of the network. At prediction time, there is
-        # no need to save the values of hidden nodes, whereas this is required
-        # at training time.
+        """
+        Args:
+            X (n_samples, n_features): The initial training data.
+        Returns:
+            scores: Output for all layers.
+
+        Compute the forward pass of the network at training time. 
+        Saves the output values of hidden nodes and output nodes. 
+        """
         scores = []
         score = X.T
         for i in range(self.n_layers):
-            score = np.dot(self.W[i], score) + np.tile(self.biases[i], (score.shape[1], 1)).T
+            score = np.dot(self.W[i], score) + self.b[i]
             score = self.activate[i](score)
             scores.append(score)
         return scores[-1], scores[:-1]
-
-    def predict(self, X):
-        score = X.T
-        for i in range(self.n_layers):
-            score = np.dot(self.W[i], score) + np.tile(self.biases[i], (score.shape[1], 1)).T
-            score = self.activate[i](score)
-        return np.argmax(score, axis=0)
         
-    def _backprop(self, X, y_pred, y, hiddens):
+    def _backprop(self, X, y_hat, y, hiddens):
+        """
+        Args:
+            X (n_samples, n_features): The initial training data.
+            y_hat (n_samples): Probabilistic vector for the class predictions.
+            y (n_samples): The gold labels per sample
+            hiddens: List of layer outputs at training time.
+        Returns:
+            grad_weights: List of gradients for the weights.
+            grad_biases: List of gradients for the biases.
+
+        Compute the forward pass of the network at inference time.
+        Returns the labels through their integer representations. 
+        """
         grad_weights = []
         grad_biases = []
 
-        grad_z = y_pred - y
+        grad_z = y_hat - y  
         for i in range(self.n_layers - 1, -1, -1):
-            h = X.T if i == 0 else hiddens[i - 1]
-            grad_weights.append(grad_z.dot(h.T))
-            grad_biases.append(grad_z.sum(axis=1, keepdims=False))
+            grad_biases.append(grad_z.sum(axis=1, keepdims=True))
+            if i == 0:
+                grad_weights.append(grad_z.dot(X))
+            else:
+                h = hiddens[i - 1]
+                grad_weights.append(grad_z.dot(h.T))
 
-            grad_h = self.W[i].T.dot(grad_z)
-            grad_z = grad_h * dReLU(h)
+                # Get gradient at previous layer
+                grad_h = self.W[i].T.dot(grad_z)
+                grad_z = grad_h * dleaky_ReLU(h)
 
         grad_weights.reverse()
         grad_biases.reverse()
         return grad_weights, grad_biases
 
+    def predict(self, X):
+        """
+        Args:
+            X (n_samples, n_features): The initial training data.
+        Returns:
+            y_hat List[int]: Prediction given as list of integers
+
+        Compute the forward pass of the network at inference time.
+        Returns the labels through their integer representations. 
+        """
+        score = X.T
+        for i in range(self.n_layers):
+            score = np.dot(self.W[i], score) + self.b[i]
+            score = self.activate[i](score)
+        y_hat = np.argmax(score, axis=0) # Get most likely label as int.
+        return y_hat
+
     def evaluate(self, X, y):
         """
-        X (n_examples x n_features)
-        y (n_examples): gold labels
+        Args:
+            X (n_examples x n_features)
+            y (n_examples): gold labels
+
+        
+        Identical to LinearModel.evaluate()
         """
-        # Identical to LinearModel.evaluate()
         y_hat = self.predict(X)
         n_correct = (y == y_hat).sum()
         n_possible = y.shape[0]
         return n_correct / n_possible
 
     def train_epoch(self, X, y, learning_rate=0.001):
-        y = self._one_hot(y)
-        y_pred, hiddens = self._forward(X)
-        grads, grad_biases = self._backprop(X, y_pred, y, hiddens)
+        """
+        Args:
+            X (n_samples, n_features): The initial training data.
+            y (n_samples): The gold labels per sample
+            learning_rate
 
-        for i in range(len((self.W))):
+        Train the model for a single epoch. Updates the model parameters through
+        forward and backward propagation. 
+        """
+        y = self._one_hot(y)
+        y_hat, hiddens = self._forward(X)
+        grads, grad_biases = self._backprop(X, y_hat, y, hiddens)
+
+        # Update model parameters
+        for i in range(len(self.W)):
             self.W[i] -= learning_rate * grads[i]
-            self.biases[i] -= learning_rate * grad_biases[i]
+            self.b[i] -= learning_rate * grad_biases[i]
 
 
 def plot(epochs, valid_accs, test_accs):
     plt.xlabel('Epoch')
     plt.ylabel('Accuracy')
-    plt.xticks(epochs)
+    plt.xticks(epochs[1::len(epochs) // 10], rotation=90)
     plt.plot(epochs, valid_accs, label='validation')
     plt.plot(epochs, test_accs, label='test')
     plt.legend()
-    plt.title('Accuracy for the logistic regression model per epoch')
-    plt.savefig('Logistic_acc.png')
+    plt.title('Accuracy for the MLP model per epoch')
+    plt.savefig('MLP_acc.png')
 
 
 def main():
@@ -269,19 +351,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
-def backpropagation(self,y, z_s, a_s):
-  dw = []  # dC/dW
-  db = []  # dC/dB
-  deltas = [None] * len(self.weights)  # delta = dC/dZ  known as error for each layer
-  # insert the last layer error
-  deltas[-1] = ((y-a_s[-1])*(self.getDerivitiveActivationFunction(self.activations[-1]))(z_s[-1]))
-  # Perform BackPropagation
-  for i in reversed(range(len(deltas)-1)):
-    deltas[i] = self.weights[i+1].T.dot(deltas[i+1])*(self.getDerivitiveActivationFunction(self.activations[i])(z_s[i]))        
-    batch_size = y.shape[1]
-    db = [d.dot(np.ones((batch_size,1)))/float(batch_size) for d in deltas]
-    dw = [d.dot(a_s[i].T)/float(batch_size) for i,d in enumerate(deltas)]
-    # return the derivitives respect to weight matrix and biases
-    return dw, db
