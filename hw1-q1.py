@@ -3,7 +3,7 @@
 """
 Deep Learning Homework 1
 Author: Willem van der Spek
-Co-Author: Nuno Damos
+Co-Author: Nuno Damas
 """
 
 

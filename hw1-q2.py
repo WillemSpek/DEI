@@ -2,6 +2,12 @@
 
 # Deep Learning Homework 1
 
+"""
+Deep Learning Homework 1
+Author: Nuno Damas
+Co-Author: Willem van der Spek
+"""
+
 import argparse
 
 import torch
