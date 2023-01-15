@@ -87,7 +87,7 @@ class Perceptron(LinearModel):
             y_i (scalar): the gold label for that example
         other arguments are ignored
 
-        Updat the weights for the Perceptron model for a single training epoch.
+        Update the weights for the Perceptron model for a single training epoch.
         """
         y_pred = np.argmax(np.dot(self.W, x_i))
 
