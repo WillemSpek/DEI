@@ -235,7 +235,7 @@ class MLP(object):
         Args:
             X (n_samples, n_features): The initial training data.
         Returns:
-            y_hat List[int]: Prediction given as list of integers
+            y_hat List[int]: Prediction given as list of integers.
 
         Compute the forward pass of the network at inference time.
         Returns the labels through their integer representations. 
